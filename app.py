@@ -1,5 +1,5 @@
 import streamlit as st
-from huggingface_hub import InferenceClient
+import requests
 from PIL import Image
 import io
 
@@ -61,19 +61,26 @@ if uploaded:
         else:
             with st.spinner("Classifying..."):
                 try:
-                    # Save as JPEG into a BytesIO buffer and seek to start
                     buf = io.BytesIO()
                     image.convert("RGB").save(buf, format="JPEG")
-                    buf.seek(0)  # ← this was missing!
+                    img_bytes = buf.getvalue()
 
-                    client = InferenceClient(provider="hf-inference", api_key=hf_token)
-                    results = client.image_classification(buf.getvalue(), model=model_id)
+                    # Correct URL format from HF docs
+                    API_URL = f"https://router.huggingface.co/hf-inference/models/{model_id}/v1/image-classification"
+                    headers = {
+                        "Authorization": f"Bearer {hf_token}",
+                        "Content-Type": "image/jpeg",
+                    }
+
+                    response = requests.post(API_URL, headers=headers, data=img_bytes, timeout=30)
+                    response.raise_for_status()
+                    results = response.json()
 
                     st.markdown("### Results")
                     for i, item in enumerate(results[:top_k]):
-                        label = item.label.replace("_", " ")
-                        pct = round(item.score * 100, 1)
-                        bar_width = round(item.score * 100)
+                        label = item["label"].replace("_", " ")
+                        pct = round(item["score"] * 100, 1)
+                        bar_width = round(item["score"] * 100)
                         badge = '<span class="top-badge">TOP</span>' if i == 0 else ""
                         st.markdown(f"""
                         <div class="result-card">
@@ -87,8 +94,9 @@ if uploaded:
                         </div>
                         """, unsafe_allow_html=True)
 
+                except requests.exceptions.HTTPError as e:
+                    st.error(f"HTTP Error {response.status_code}: {response.text}")
                 except Exception as e:
                     st.error(f"Error: {e}")
-                    st.info("💡 Make sure your token is valid and try again.")
 else:
     st.info("⬆️ Upload an image above to get started.")
