@@ -94,9 +94,10 @@ if uploaded:
             st.warning("⬅️ Enter your Hugging Face API token in the sidebar to classify.")
         else:
             with st.spinner("Classifying..."):
-                # Convert image to bytes
+                # Convert image to bytes (handle RGBA/PNG transparency)
                 buf = io.BytesIO()
-                image.save(buf, format="JPEG")
+                img_rgb = image.convert("RGB")
+                img_rgb.save(buf, format="JPEG")
                 img_bytes = buf.getvalue()
 
                 API_URL = f"https://api-inference.huggingface.co/models/{model_id}"
