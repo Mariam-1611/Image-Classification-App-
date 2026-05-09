@@ -67,7 +67,7 @@ if uploaded:
                     buf.seek(0)  # ← this was missing!
 
                     client = InferenceClient(provider="hf-inference", api_key=hf_token)
-                    results = client.image_classification(buf, model=model_id)
+                    results = client.image_classification(buf.getvalue(), model=model_id)
 
                     st.markdown("### Results")
                     for i, item in enumerate(results[:top_k]):
