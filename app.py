@@ -2,101 +2,129 @@ import streamlit as st
 import requests
 from PIL import Image
 import io
+import base64
 
-st.set_page_config(page_title="Image Classifier", page_icon="🔍", layout="centered")
+st.set_page_config(page_title="OCR - Text Extractor", page_icon="📄", layout="centered")
 
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap');
   html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
   h1, h2, h3 { font-family: 'Space Mono', monospace; }
-  .stApp { background: #0f0f0f; color: #f0f0f0; }
-  .result-card {
-    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px;
-    padding: 16px 20px; margin: 8px 0; display: flex;
-    align-items: center; justify-content: space-between;
+  .stApp { background: #0d1117; color: #e6edf3; }
+  .result-box {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 12px; padding: 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.9rem; line-height: 1.7;
+    color: #e6edf3; white-space: pre-wrap;
+    max-height: 400px; overflow-y: auto;
   }
-  .label { font-size: 1rem; font-weight: 600; color: #f0f0f0; text-transform: capitalize; }
-  .score { font-family: 'Space Mono', monospace; font-size: 1rem; color: #00e5a0; }
-  .bar-bg { background: #2a2a2a; border-radius: 4px; height: 6px; margin-top: 6px; }
-  .bar-fill { background: linear-gradient(90deg, #00e5a0, #00b4d8); border-radius: 4px; height: 6px; }
-  .top-badge {
-    background: #00e5a0; color: #0f0f0f; font-family: 'Space Mono', monospace;
-    font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+  .stat-card {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 8px; padding: 12px 16px;
+    text-align: center;
   }
+  .stat-num { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: #58a6ff; }
+  .stat-label { font-size: 0.75rem; color: #8b949e; margin-top: 2px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# 🔍 Image Classifier")
-st.markdown("Upload an image — powered by **Hugging Face** · `google/vit-base-patch16-224`")
+st.markdown("# 📄 OCR Text Extractor")
+st.markdown("Upload a scanned document — extract text instantly using **Hugging Face**")
 st.divider()
 
 with st.sidebar:
     st.markdown("### ⚙️ Settings")
     hf_token = st.text_input("Hugging Face API Token", type="password", placeholder="hf_xxxxxxxxxxxxxxxxxxxx")
-    model_id = st.selectbox("Model", [
-        "google/vit-base-patch16-224",
-        "microsoft/resnet-50",
-        "google/efficientnet-b7",
-        "facebook/convnext-base-224",
-    ])
-    top_k = st.slider("Top predictions to show", min_value=3, max_value=10, value=5)
     st.markdown("---")
     st.markdown("**How to get a free token:**")
     st.markdown("1. Go to [huggingface.co](https://huggingface.co)")
     st.markdown("2. Sign up / Log in")
     st.markdown("3. Settings → Access Tokens")
     st.markdown("4. Create a **Read** token")
+    st.markdown("---")
+    st.markdown("**Supported formats:**")
+    st.markdown("JPG, PNG, BMP, TIFF, WEBP")
 
-uploaded = st.file_uploader("Drop your image here", type=["jpg", "jpeg", "png", "webp", "bmp"], label_visibility="collapsed")
+uploaded = st.file_uploader(
+    "Drop your scanned document here",
+    type=["jpg", "jpeg", "png", "bmp", "tiff", "webp"],
+    label_visibility="collapsed"
+)
 
 if uploaded:
     image = Image.open(uploaded)
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.image(image, caption="Your image", use_container_width=True)
-    with col2:
-        if not hf_token:
-            st.warning("⬅️ Enter your Hugging Face API token in the sidebar.")
-        else:
-            with st.spinner("Classifying..."):
-                try:
-                    buf = io.BytesIO()
-                    image.convert("RGB").save(buf, format="JPEG")
-                    img_bytes = buf.getvalue()
+    st.image(image, caption="Uploaded document", use_container_width=True)
+    st.divider()
 
-                    # Correct URL format from HF docs
-                    API_URL = f"https://router.huggingface.co/hf-inference/models/{model_id}/v1/image-classification"
-                    headers = {
-                        "Authorization": f"Bearer {hf_token}",
-                        "Content-Type": "image/jpeg",
-                    }
+    if not hf_token:
+        st.warning("⬅️ Enter your Hugging Face API token in the sidebar to extract text.")
+    else:
+        with st.spinner("Extracting text..."):
+            try:
+                buf = io.BytesIO()
+                image.convert("RGB").save(buf, format="JPEG")
+                img_bytes = buf.getvalue()
 
-                    response = requests.post(API_URL, headers=headers, data=img_bytes, timeout=30)
-                    response.raise_for_status()
-                    results = response.json()
+                # Use microsoft/trocr-base-printed — best for scanned docs
+                API_URL = "https://router.huggingface.co/hf-inference/models/microsoft/trocr-base-printed"
+                headers = {
+                    "Authorization": f"Bearer {hf_token}",
+                    "Content-Type": "image/jpeg",
+                }
 
-                    st.markdown("### Results")
-                    for i, item in enumerate(results[:top_k]):
-                        label = item["label"].replace("_", " ")
-                        pct = round(item["score"] * 100, 1)
-                        bar_width = round(item["score"] * 100)
-                        badge = '<span class="top-badge">TOP</span>' if i == 0 else ""
-                        st.markdown(f"""
-                        <div class="result-card">
-                          <div style="flex:1">
-                            <div style="display:flex;align-items:center;gap:8px">
-                              <span class="label">{label}</span>{badge}
-                            </div>
-                            <div class="bar-bg"><div class="bar-fill" style="width:{bar_width}%"></div></div>
-                          </div>
-                          <span class="score">{pct}%</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+                response = requests.post(API_URL, headers=headers, data=img_bytes, timeout=60)
+                response.raise_for_status()
+                result = response.json()
 
-                except requests.exceptions.HTTPError as e:
-                    st.error(f"HTTP Error {response.status_code}: {response.text}")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                # Extract text from response
+                if isinstance(result, list) and len(result) > 0:
+                    extracted = result[0].get("generated_text", "")
+                elif isinstance(result, dict):
+                    extracted = result.get("generated_text", str(result))
+                else:
+                    extracted = str(result)
+
+                if extracted:
+                    st.markdown("### ✅ Extracted Text")
+
+                    # Stats
+                    words = len(extracted.split())
+                    chars = len(extracted)
+                    lines = len(extracted.splitlines())
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.markdown(f'<div class="stat-card"><div class="stat-num">{words}</div><div class="stat-label">Words</div></div>', unsafe_allow_html=True)
+                    with c2:
+                        st.markdown(f'<div class="stat-card"><div class="stat-num">{chars}</div><div class="stat-label">Characters</div></div>', unsafe_allow_html=True)
+                    with c3:
+                        st.markdown(f'<div class="stat-card"><div class="stat-num">{lines}</div><div class="stat-label">Lines</div></div>', unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    # Display text
+                    st.markdown(f'<div class="result-box">{extracted}</div>', unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    # Copy to clipboard button
+                    st.code(extracted, language=None)
+
+                    # Download as .txt
+                    st.download_button(
+                        label="⬇️ Download as .txt",
+                        data=extracted,
+                        file_name="extracted_text.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                    )
+                else:
+                    st.warning("No text could be extracted from this image.")
+
+            except requests.exceptions.HTTPError as e:
+                st.error(f"HTTP Error {response.status_code}: {response.text}")
+            except Exception as e:
+                st.error(f"Error: {e}")
 else:
-    st.info("⬆️ Upload an image above to get started.")
+    st.info("⬆️ Upload a scanned document above to get started.")
