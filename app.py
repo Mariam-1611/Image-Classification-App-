@@ -100,7 +100,7 @@ if uploaded:
                 img_rgb.save(buf, format="JPEG")
                 img_bytes = buf.getvalue()
 
-                API_URL = f"https://api-inference.huggingface.co/models/{model_id}"
+                API_URL = f"https://router.huggingface.co/hf-inference/models/{model_id}"
                 headers = {"Authorization": f"Bearer {hf_token}"}
 
                 try:
