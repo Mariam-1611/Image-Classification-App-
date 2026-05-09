@@ -61,12 +61,13 @@ if uploaded:
         else:
             with st.spinner("Classifying..."):
                 try:
+                    # Save as JPEG into a BytesIO buffer and seek to start
                     buf = io.BytesIO()
                     image.convert("RGB").save(buf, format="JPEG")
-                    img_bytes = buf.getvalue()
+                    buf.seek(0)  # ← this was missing!
 
                     client = InferenceClient(provider="hf-inference", api_key=hf_token)
-                    results = client.image_classification(img_bytes, model=model_id)
+                    results = client.image_classification(buf, model=model_id)
 
                     st.markdown("### Results")
                     for i, item in enumerate(results[:top_k]):
